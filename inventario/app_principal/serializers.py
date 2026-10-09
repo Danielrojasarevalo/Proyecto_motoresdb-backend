@@ -139,7 +139,7 @@ class FacturaCreateSerializer(serializers.ModelSerializer):
         model = Factura
         fields = [
             'numero_factura', 'cliente', 'fecha_emision', 'fecha_vencimiento',
-            'impuestos', 'observaciones', 'detalles'
+            'impuestos', 'estado', 'observaciones', 'detalles'
         ]
     
     def create(self, validated_data):

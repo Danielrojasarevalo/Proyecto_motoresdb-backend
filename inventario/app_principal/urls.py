@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    ProveedorViewSet, CategoriaViewSet, ProductoViewSet,
+    LoginView, ProveedorViewSet, CategoriaViewSet, ProductoViewSet,
     ClienteViewSet, MovimientoViewSet, FacturaViewSet, DashboardViewSet
 )
 
@@ -16,5 +16,6 @@ router.register(r'facturas', FacturaViewSet, basename='factura')
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 
 urlpatterns = [
+    path('auth/login/', LoginView.as_view(), name='login'),
     path('', include(router.urls)),
 ]

@@ -1,8 +1,11 @@
 from django.shortcuts import render
 from django.db import transaction
+from django.contrib.auth import get_user_model
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Count, Q, F
 from django.db.models.deletion import ProtectedError
@@ -16,6 +19,41 @@ from .serializers import (
     FacturaSerializer, FacturaListSerializer, FacturaCreateSerializer,
     DetalleFacturaSerializer, DashboardStatsSerializer
 )
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip()
+        password = request.data.get('password') or ''
+
+        if not email or not password:
+            return Response(
+                {'detail': 'Correo y contraseña son obligatorios.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        UserModel = get_user_model()
+        user = UserModel.objects.filter(email__iexact=email).first()
+
+        if not user or not user.check_password(password):
+            return Response(
+                {'detail': 'Usuario o contraseña incorrectos.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not user.is_active:
+            return Response(
+                {'detail': 'Usuario inactivo.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return Response({
+            'email': user.email,
+            'username': user.username,
+            'is_superuser': user.is_superuser,
+        })
 
 
 class ProveedorViewSet(viewsets.ModelViewSet):
