@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Proveedor, Categoria, Producto, Cliente, Movimiento, Factura, DetalleFactura
+from .models import (
+    Proveedor, Categoria, Producto, Cliente, Movimiento, Factura, DetalleFactura,
+    ReservaFiesta, Glamping, GlampingPrecio, GlampingImagen
+)
 
 
 @admin.register(Proveedor)
@@ -67,3 +70,29 @@ class DetalleFacturaAdmin(admin.ModelAdmin):
     search_fields = ['factura__numero_factura', 'producto__nombre']
     readonly_fields = ['subtotal']
 
+
+
+@admin.register(ReservaFiesta)
+class ReservaFiestaAdmin(admin.ModelAdmin):
+    list_display = ['fecha', 'hora_inicio', 'nombre_cliente', 'tipo_evento', 'precio', 'abono', 'estado']
+    list_filter = ['estado', 'fecha']
+    search_fields = ['nombre_cliente', 'telefono', 'tipo_evento']
+    ordering = ['fecha']
+
+
+class GlampingPrecioInline(admin.TabularInline):
+    model = GlampingPrecio
+    extra = 1
+
+
+class GlampingImagenInline(admin.TabularInline):
+    model = GlampingImagen
+    extra = 1
+
+
+@admin.register(Glamping)
+class GlampingAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'capacidad', 'activo']
+    list_filter = ['activo']
+    search_fields = ['nombre']
+    inlines = [GlampingPrecioInline, GlampingImagenInline]

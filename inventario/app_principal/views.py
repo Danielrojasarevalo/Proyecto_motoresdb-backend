@@ -6,18 +6,23 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Count, Q, F
 from django.db.models.deletion import ProtectedError
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from .models import Proveedor, Categoria, Producto, Cliente, Movimiento, Factura, DetalleFactura
+from .models import (
+    Proveedor, Categoria, Producto, Cliente, Movimiento, Factura, DetalleFactura,
+    ReservaFiesta, Glamping, GlampingImagen
+)
 from .serializers import (
     ProveedorSerializer, CategoriaSerializer, ProductoSerializer, ProductoListSerializer,
     ClienteSerializer, MovimientoSerializer, MovimientoCreateSerializer,
     FacturaSerializer, FacturaListSerializer, FacturaCreateSerializer,
-    DetalleFacturaSerializer, DashboardStatsSerializer
+    DetalleFacturaSerializer, DashboardStatsSerializer,
+    ReservaFiestaSerializer, GlampingSerializer, GlampingImagenSerializer
 )
 
 
@@ -485,3 +490,78 @@ class DashboardViewSet(viewsets.ViewSet):
             'utilidad': utilidad
         })
 
+
+
+class PaginacionAmplia(PageNumberPagination):
+    """Permite pedir más resultados por página con ?page_size="""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
+
+class ReservaFiestaViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para las citas/reservas de fiestas del salón de arriba de la tienda
+    """
+    queryset = ReservaFiesta.objects.all()
+    serializer_class = ReservaFiestaSerializer
+    pagination_class = PaginacionAmplia
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['estado', 'fecha']
+    search_fields = ['nombre_cliente', 'telefono', 'tipo_evento', 'descripcion']
+    ordering_fields = ['fecha', 'precio', 'fecha_creacion']
+    ordering = ['fecha', 'hora_inicio']
+
+    @action(detail=False, methods=['get'])
+    def proximas(self, request):
+        """Reservas desde hoy en adelante que no estén canceladas"""
+        reservas = self.queryset.filter(fecha__gte=datetime.now().date()).exclude(estado='cancelada')
+        serializer = self.get_serializer(reservas, many=True)
+        return Response(serializer.data)
+
+
+class GlampingViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestionar glampings, sus precios e imágenes
+    """
+    queryset = Glamping.objects.prefetch_related('precios', 'imagenes').all()
+    serializer_class = GlampingSerializer
+    pagination_class = PaginacionAmplia
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['activo']
+    search_fields = ['nombre', 'descripcion']
+    ordering = ['nombre']
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        with transaction.atomic():
+            for imagen in instance.imagenes.all():
+                imagen.delete()
+            instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'], url_path='imagenes')
+    def subir_imagenes(self, request, pk=None):
+        """Sube una o varias imágenes (campo 'imagenes') al glamping"""
+        glamping = self.get_object()
+        archivos = request.FILES.getlist('imagenes')
+        if not archivos:
+            return Response({'error': 'No se enviaron imágenes.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        creadas = []
+        for archivo in archivos:
+            serializer = GlampingImagenSerializer(data={'imagen': archivo}, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            serializer.save(glamping=glamping)
+            creadas.append(serializer.data)
+        return Response(creadas, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path=r'imagenes/(?P<imagen_id>[^/.]+)')
+    def eliminar_imagen(self, request, pk=None, imagen_id=None):
+        """Elimina una imagen del glamping"""
+        glamping = self.get_object()
+        imagen = glamping.imagenes.filter(pk=imagen_id).first()
+        if not imagen:
+            return Response({'error': 'Imagen no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        imagen.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     LoginView, ProveedorViewSet, CategoriaViewSet, ProductoViewSet,
-    ClienteViewSet, MovimientoViewSet, FacturaViewSet, DashboardViewSet
+    ClienteViewSet, MovimientoViewSet, FacturaViewSet, DashboardViewSet,
+    ReservaFiestaViewSet, GlampingViewSet
 )
 
 # Crear el router para las APIs
@@ -14,6 +15,8 @@ router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'movimientos', MovimientoViewSet, basename='movimiento')
 router.register(r'facturas', FacturaViewSet, basename='factura')
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
+router.register(r'fiestas', ReservaFiestaViewSet, basename='fiesta')
+router.register(r'glampings', GlampingViewSet, basename='glamping')
 
 urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
