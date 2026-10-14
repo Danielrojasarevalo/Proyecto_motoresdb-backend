@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, FileExtensionValidator
 from decimal import Decimal
 
 
@@ -213,3 +213,94 @@ class DetalleFactura(models.Model):
         super().save(*args, **kwargs)
         # Actualiza el total de la factura
         self.factura.calcular_total()
+
+
+class ReservaFiesta(models.Model):
+    """Citas/reservas de fiestas en el salón de arriba de la tienda"""
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('confirmada', 'Confirmada'),
+        ('realizada', 'Realizada'),
+        ('cancelada', 'Cancelada'),
+    ]
+
+    nombre_cliente = models.CharField(max_length=200)
+    telefono = models.CharField(max_length=20, blank=True, null=True)
+    tipo_evento = models.CharField(max_length=100, blank=True, null=True, help_text='Ej: Cumpleaños, Boda, Grado')
+    fecha = models.DateField()
+    hora_inicio = models.TimeField(blank=True, null=True)
+    hora_fin = models.TimeField(blank=True, null=True)
+    numero_personas = models.IntegerField(blank=True, null=True, validators=[MinValueValidator(1)])
+    precio = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0'))], help_text='Cuánto se cobra por la fiesta')
+    abono = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(Decimal('0'))])
+    descripcion = models.TextField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Reserva de fiesta'
+        verbose_name_plural = 'Reservas de fiestas'
+        ordering = ['fecha', 'hora_inicio']
+
+    def __str__(self):
+        return f"{self.fecha} - {self.nombre_cliente}"
+
+    @property
+    def saldo(self):
+        return self.precio - self.abono
+
+
+class Glamping(models.Model):
+    """Unidades de glamping que se ofrecen"""
+    nombre = models.CharField(max_length=200)
+    descripcion = models.TextField(blank=True, null=True)
+    capacidad = models.IntegerField(blank=True, null=True, validators=[MinValueValidator(1)], help_text='Número de personas')
+    activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Glamping'
+        verbose_name_plural = 'Glampings'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+class GlampingPrecio(models.Model):
+    """Diferentes precios de un glamping (entre semana, fin de semana, temporada...)"""
+    glamping = models.ForeignKey(Glamping, on_delete=models.CASCADE, related_name='precios')
+    concepto = models.CharField(max_length=100, help_text='Ej: Noche entre semana, Fin de semana, Temporada alta')
+    precio = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0'))])
+
+    class Meta:
+        verbose_name = 'Precio de glamping'
+        verbose_name_plural = 'Precios de glamping'
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.glamping.nombre} - {self.concepto}: {self.precio}"
+
+
+class GlampingImagen(models.Model):
+    """Imágenes de un glamping"""
+    glamping = models.ForeignKey(Glamping, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.FileField(
+        upload_to='glampings/',
+        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp', 'gif'])]
+    )
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Imagen de glamping'
+        verbose_name_plural = 'Imágenes de glamping'
+        ordering = ['id']
+
+    def __str__(self):
+        return f"Imagen de {self.glamping.nombre}"
+
+    def delete(self, *args, **kwargs):
+        self.imagen.delete(save=False)
+        super().delete(*args, **kwargs)

@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Proveedor, Categoria, Producto, Cliente, Movimiento, Factura, DetalleFactura
+from .models import (
+    Proveedor, Categoria, Producto, Cliente, Movimiento, Factura, DetalleFactura,
+    ReservaFiesta, Glamping, GlampingPrecio, GlampingImagen
+)
 
 
 class ProveedorSerializer(serializers.ModelSerializer):
@@ -187,3 +190,69 @@ class ReporteInventarioSerializer(serializers.Serializer):
     stock_minimo = serializers.IntegerField()
     estado = serializers.CharField()
     valor_inventario = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class ReservaFiestaSerializer(serializers.ModelSerializer):
+    """Serializer para reservas de fiestas"""
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    saldo = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = ReservaFiesta
+        fields = [
+            'id', 'nombre_cliente', 'telefono', 'tipo_evento', 'fecha', 'hora_inicio', 'hora_fin',
+            'numero_personas', 'precio', 'abono', 'saldo', 'descripcion', 'estado', 'estado_display',
+            'fecha_creacion', 'fecha_actualizacion'
+        ]
+        read_only_fields = ['fecha_creacion', 'fecha_actualizacion']
+
+    def validate(self, attrs):
+        precio = attrs.get('precio', getattr(self.instance, 'precio', None))
+        abono = attrs.get('abono', getattr(self.instance, 'abono', 0)) or 0
+        if precio is not None and abono > precio:
+            raise serializers.ValidationError({'abono': 'El abono no puede ser mayor que el precio.'})
+        return attrs
+
+
+class GlampingPrecioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlampingPrecio
+        fields = ['id', 'concepto', 'precio']
+
+
+class GlampingImagenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlampingImagen
+        fields = ['id', 'imagen', 'fecha_subida']
+        read_only_fields = ['fecha_subida']
+
+
+class GlampingSerializer(serializers.ModelSerializer):
+    """Serializer de glamping con sus precios (editables) e imágenes (solo lectura)"""
+    precios = GlampingPrecioSerializer(many=True, required=False)
+    imagenes = GlampingImagenSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Glamping
+        fields = [
+            'id', 'nombre', 'descripcion', 'capacidad', 'activo', 'precios', 'imagenes',
+            'fecha_creacion', 'fecha_actualizacion'
+        ]
+        read_only_fields = ['fecha_creacion', 'fecha_actualizacion']
+
+    def create(self, validated_data):
+        precios_data = validated_data.pop('precios', [])
+        glamping = Glamping.objects.create(**validated_data)
+        for precio_data in precios_data:
+            GlampingPrecio.objects.create(glamping=glamping, **precio_data)
+        return glamping
+
+    def update(self, instance, validated_data):
+        precios_data = validated_data.pop('precios', None)
+        instance = super().update(instance, validated_data)
+        # Si se envían precios, reemplazan la lista completa
+        if precios_data is not None:
+            instance.precios.all().delete()
+            for precio_data in precios_data:
+                GlampingPrecio.objects.create(glamping=instance, **precio_data)
+        return instance
